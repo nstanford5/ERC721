@@ -63,13 +63,11 @@ export const main = Reach.App(() => {
     launched: Fun([Contract], Null),
   });
   const A = API({
-    safeTransferFrom1: Fun([Address, Address, UInt, BytesDyn], Null),
-    safeTransferFrom2: Fun([Address, Address, UInt], Null),
-    transferFrom: Fun([Address, Address, UInt], Null),
     approve: Fun([Address, UInt], Null),
     setApprovalForAll: Fun([Address, Bool], Null),
-    mint: Fun([Address, UInt], Null),
-    burn: Fun([UInt], Null),
+    transferFrom: Fun([Address, Address, UInt], Null),
+    safeTransferFrom2: Fun([Address, Address, UInt], Null),
+    safeTransferFrom1: Fun([Address, Address, UInt, BytesDyn], Null),
   },{
     // this specifies an alias for these functions
     safeTransferFrom1: 'safeTransferFrom',
@@ -111,8 +109,6 @@ export const main = Reach.App(() => {
 
   const [] = parallelReduce([])
   .define(() => {
-
-
     V.balanceOf.set((owner) => {
       check(owner != zeroAddr, "ERC721::balanceOf: Address zero is not a valid owner");
       const m_bal = balances[owner];
@@ -230,36 +226,6 @@ export const main = Reach.App(() => {
       return [];
     }];
   })
-  .api_(A.mint, (to, tokenId) => {
-    check(to != zeroAddr, "Cannot mint to zero address");
-    check(!tokenExists(tokenId), "Token already exists");
-    check(this == D, "mint can only be called by deployer");
-    return [ (ret) => {
-      balances[to] = fromMaybe(balances[to], () => 1, (x) => x + 1);
-      owners[tokenId] = to;
-      E.Transfer(zeroAddr, to, tokenId);
-      ret(null);
-      return [];
-    }];
-  })
-  .api_(A.burn, (tokenId) => {
-    const owner = ownerOf(tokenId);
-    check(isApprovedOrOwner(this, tokenId), "ERC721::burn: caller is not owner nor approved");
-    return [ (ret) => {
-      approve(zeroAddr, tokenId);
-      const curBal = balances[owner];
-      const newBal = fromMaybe(curBal, () => 0, (x) => x - 1);
-      if(newBal == 0) {
-        delete balances[owner];
-      } else {
-        balances[owner] = newBal;
-      }
-      owners[tokenId] = zeroAddr;
-      E.Transfer(owner, zeroAddr, tokenId);
-      ret(null);
-      return [];
-    }];
-  });//end of A.burn
   commit();
   exit();
 });// end of Reach.App

@@ -150,10 +150,6 @@ export const main = Reach.App(() => {
       check(tokenExists(tokenId), "tokenURI: URI query for non-existent token");
       return StringDyn.concat(tokenURI, StringDyn(tokenId));
     });
-  })
-  .invariant(balance() == 0)
-  .while(true)
-  .define(() => {
     const approve = (to, tokenId) => {
       const owner = ownerOf(tokenId);
       tokenApprovals[tokenId] = to;
@@ -161,6 +157,7 @@ export const main = Reach.App(() => {
     }
     const transferChecks = (caller, from_, to, tokenId) => {
       const owner = ownerOf(tokenId);
+      // this is the only error left?
       //check(owner == from_, "ERC721::transfer: transfer from incorrect owner");
       check(to != zeroAddr, "ERC721::transfer: transfer to the zero address");
       check(isApprovedOrOwner(caller, tokenId), "ERC721::transfer: caller is not owner nor approved");
@@ -187,6 +184,8 @@ export const main = Reach.App(() => {
       });
     }
   })
+  .invariant(balance() == 0)
+  .while(true)
   .api_(A.safeTransferFrom1, (from_, to, tokenId, data) => {
     transferChecks(this, from_, to, tokenId);
     return [ (ret) => {

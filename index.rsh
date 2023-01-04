@@ -89,7 +89,7 @@ export const main = Reach.App(() => {
   });
   const E = Events({
     Transfer: [Address, Address, UInt],
-    Approval: [Address, Address, Bool],
+    Approval: [Address, Address, UInt],
     ApprovalForAll: [Address, Address, Bool],
   });
   init();
@@ -177,7 +177,7 @@ export const main = Reach.App(() => {
       const ctcMaybe = Contract.fromAddress(to);
       ctcMaybe.match({
         Some: (ctc) => {
-          const r = remote(ctc, ERC721TokenReceiverI);
+          const r = remote(ctc, ERC721TokenReceived);
           const mv = r.onERC721Received(getAddress(), from_, tokenId, data);
           // This hex string is bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
           enforce(mv == Bytes.fromHex('0x150b7a02'));
@@ -237,7 +237,7 @@ export const main = Reach.App(() => {
     return [ (ret) => {
       balances[to] = fromMaybe(balances[to], () => 1, (x) => x + 1);
       owners[tokenId] = to;
-      E.Transfer(zeroAddre, to, tokenId);
+      E.Transfer(zeroAddr, to, tokenId);
       ret(null);
       return [];
     }];
@@ -248,7 +248,7 @@ export const main = Reach.App(() => {
     return [ (ret) => {
       approve(zeroAddr, tokenId);
       const curBal = balances[owner];
-      const newbal = fromMaybe(curBal, () => 0, (x) => x - 1);
+      const newBal = fromMaybe(curBal, () => 0, (x) => x - 1);
       if(newBal == 0) {
         delete balances[owner];
       } else {
@@ -260,4 +260,6 @@ export const main = Reach.App(() => {
       return [];
     }];
   });//end of A.burn
+  commit();
+  exit();
 });// end of Reach.App

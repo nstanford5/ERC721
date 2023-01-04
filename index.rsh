@@ -75,9 +75,10 @@ export const main = Reach.App(() => {
     safeTransferFrom1: 'safeTransferFrom',
     safeTransferFrom2: 'safeTransferFrom',
   });
-  const ERC721TokenReceived = API('onERC721Received',{
+  // this is just a function object
+  const ERC721TokenReceived = {
     onERC721Received: Fun([Address, Address, UInt, BytesDyn], Bytes(4)),
-  });
+  };
   const V = View({
     name: StringDyn,
     symbol: StringDyn,

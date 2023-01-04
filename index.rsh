@@ -110,12 +110,15 @@ export const main = Reach.App(() => {
 
   const [] = parallelReduce([])
   .define(() => {
+
+
     V.balanceOf.set((owner) => {
       check(owner != zeroAddr, "ERC721::balanceOf: Address zero is not a valid owner");
       const m_bal = balances[owner];
       return fromSome(m_bal, 0);
     });
     const tokenExists = (tokenId) => isSome(owners[tokenId]);
+
     const ownerOf = (tokenId) => {
       check(tokenExists(tokenId), "ERC721::ownerOf: Owner query for non-existent token");
       const m_owner = owners[tokenId];
@@ -124,12 +127,12 @@ export const main = Reach.App(() => {
     V.ownerOf.set(ownerOf);
 
     const getApproved = (tokenId) => {
-      check(tokenExists(tokenId), "ERC721::getApproved: approved query for non-existent token");
+      check(tokenExists(tokenId), "ERC721::getApproved: approved query for non-existent token")
       const m_approval = tokenApprovals[tokenId];
       return fromSome(m_approval, zeroAddr);
     };
     V.getApproved.set(getApproved);
-    
+
     const isApprovedForAll = (owner, operator) => {
       const m_approved = operatorApprovals[[owner, operator]];
       return fromSome(m_approved, false);
@@ -137,40 +140,44 @@ export const main = Reach.App(() => {
     V.isApprovedForAll.set(isApprovedForAll);
 
     const isApprovedOrOwner = (spender, tokenId) => {
-      check(tokenExists(tokenId), "isApprovedOrOwnder: token exists");
+      check(tokenExists(tokenId), "isApprovedOrOwner: token exists");
       const owner = ownerOf(tokenId);
       return spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender;
-    };
+    }
+
     V.tokenURI.set((tokenId) => {
       check(tokenExists(tokenId), "tokenURI: URI query for non-existent token");
       return StringDyn.concat(tokenURI, StringDyn(tokenId));
     });
-
+  })
+  .invariant(balance() == 0)
+  .while(true)
+  .define(() => {
     const approve = (to, tokenId) => {
       const owner = ownerOf(tokenId);
       tokenApprovals[tokenId] = to;
       E.Approval(owner, to, tokenId);
-    };
+    }
     const transferChecks = (caller, from_, to, tokenId) => {
       const owner = ownerOf(tokenId);
-      check(owner == from_, "ERC721::transfer: transfer from incorrect owner");
+      //check(owner == from_, "ERC721::transfer: transfer from incorrect owner");
       check(to != zeroAddr, "ERC721::transfer: transfer to the zero address");
       check(isApprovedOrOwner(caller, tokenId), "ERC721::transfer: caller is not owner nor approved");
-    };
+    }
     const transfer_ = (caller, from_, to, tokenId) => {
       transferChecks(caller, from_, to, tokenId);
       approve(zeroAddr, tokenId);
-      balances[from_] = maybe(balance[from_], 0, (b) => b - 1);
-      balance[to]     = maybe(balances[to]  , 1, (b) => b + 1);
+      balances[from_] = maybe(balances[from_], 0, (b) => b - 1);
+      balances[to]    = maybe(balances[to]   , 1, (b) => b + 1);
       owners[tokenId] = to;
       E.Transfer(from_, to, tokenId);
-    };
+    }
     const doSafeTransferFrom = (caller, from_, to, tokenId, data) => {
       transfer_(caller, from_, to, tokenId);
       const ctcMaybe = Contract.fromAddress(to);
       ctcMaybe.match({
         Some: (ctc) => {
-          const r = remote(ctc, ERC721TokenReceived);
+          const r = remote(ctc, ERC721TokenReceiverI);
           const mv = r.onERC721Received(getAddress(), from_, tokenId, data);
           // This hex string is bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
           enforce(mv == Bytes.fromHex('0x150b7a02'));
@@ -179,8 +186,6 @@ export const main = Reach.App(() => {
       });
     }
   })
-  .invariant(balance() == 0)
-  .while(true)
   .api_(A.safeTransferFrom1, (from_, to, tokenId, data) => {
     transferChecks(this, from_, to, tokenId);
     return [ (ret) => {
@@ -230,11 +235,29 @@ export const main = Reach.App(() => {
     check(!tokenExists(tokenId), "Token already exists");
     check(this == D, "mint can only be called by deployer");
     return [ (ret) => {
-      balances[to] = fromMaybe(balances[to], () => 1, (x) => x + )
-    }]
+      balances[to] = fromMaybe(balances[to], () => 1, (x) => x + 1);
+      owners[tokenId] = to;
+      E.Transfer(zeroAddre, to, tokenId);
+      ret(null);
+      return [];
+    }];
   })
-
-
-  commit();
-  exit();
-});
+  .api_(A.burn, (tokenId) => {
+    const owner = ownerOf(tokenId);
+    check(isApprovedOrOwner(this, tokenId), "ERC721::burn: caller is not owner nor approved");
+    return [ (ret) => {
+      approve(zeroAddr, tokenId);
+      const curBal = balances[owner];
+      const newbal = fromMaybe(curBal, () => 0, (x) => x - 1);
+      if(newBal == 0) {
+        delete balances[owner];
+      } else {
+        balances[owner] = newBal;
+      }
+      owners[tokenId] = zeroAddr;
+      E.Transfer(owner, zeroAddr, tokenId);
+      ret(null);
+      return [];
+    }];
+  });//end of A.burn
+});// end of Reach.App

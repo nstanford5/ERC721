@@ -66,6 +66,7 @@ const ctcInfo = await ctc0.getInfo();
 const ctc = (acc) => acc.contract(backend, ctcInfo);
 
 
+//await assertFail(ctc0.v.balanceOf(zeroAddr));
 
 
 console.log('Exiting...');

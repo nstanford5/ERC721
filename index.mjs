@@ -48,7 +48,9 @@ const startMeUp = async (ctc, meta) => {
     await ctc.p.Deployer({
       meta,
       zeroAddr: zeroAddr,
+      tokId: 1,// simulate asset ID num
       launched: (ctc) => {
+        console.log(`The contract has been deployed: ${ctc}`);
         throw flag;
       },
     });
@@ -63,47 +65,34 @@ const meta = {
   name: "Reach_ERC721",
   symbol: "RCH",
   tokenURI: 'tokenURIstringhere',
-}
+};
 
 const ctc0 = acc0.contract(backend);
 console.log('Starting backend...');
 await startMeUp(ctc0, meta);// contract deployed
 
 const ctcInfo = await ctc0.getInfo();
-const ctc = (acc) => acc.contract(backend, ctcInfo);
-
-/**
- * Locking mechanism.
- * 
- * Do I need this? Or can I make it work
- * 
- * Finish locking mechanism
- */
-const evLocks = {};
-const assertEvent = {};
-for (const ev of ["Transfer", "Approval", "ApprovalForAll"]){
-  // Make lock, to wait for an event to occur
-  const l = lock();
-  ctc.on(ev, (...args) => l.unlock(args));
-  evLocks[ev] = l;
-
-  // Event occurence assertion helper
-  assertEvent[ev] = async (...expectedArgs) => {
-    const args = await l.wait;
-    l.reset();
-    expectedArgs.forEach((expectedArg, i) => assertEq(args[i], expectedArg, `${ev} field ${i}`));
-  }
-}// end of for loop
-
+const ctc1 = acc1.contract(backend, ctcInfo);
 // other helpers
+const assertBalances = async (bal0, bal1, bal2, bal3) => {
+  assertEq(bal0, (await ctc0.v.balanceOf(acc0.getAddress()))[1])// change this to unsafe views
+  // assertEq(bal1, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
+  // assertEq(bal2, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
+  // assertEq(bal3, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
+  console.log(`assertBalances complete`);
+};
 const assertOwners = async (...owners) => {
-  assertEq(await ctc.ownerOf(tok1), owners[0], "ownerOf(1)");
+  assertEq(await ctc1.ownerOf(tok1), owners[0], "ownerOf(1)");
 
   const countAddr = addr => owners.reduce((n, a) => n + (addr === a ? 1 : 0), 0);
-  assertEq(await ctc.balanceOf(addr1), countAddr(addr1), "balanceOf(addr1)");
-}
-// networkAccount: https://docs.reach.sh/frontend/#js_networkAccount
-const [_, ctc1, ctc2, ctc3] = accs.map(a => ctc.connect(a.networkAccount));
+  assertEq(await ctc1(addr1).balanceOf(addr1), countAddr(addr1), "balanceOf(addr1)");
+};
+const assertEvent = async (event, ...expectedArgs) => {
+  const e = await ctc0.events[event].next();
+  const actualArgs = e.what;
+  expectedArgs.forEach((expectedArg, i) => assertEq(actualArgs[i], expectedArg, `${event} field ${i}`));
+  console.log(`assertEvent complete`);
+};
 const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
   const fromCtc = ctcOverride ?? (from === addr1 ? ctc1 : (from === addr2 ? ctc2 : ctc3));
   await waitTxn(fromCtc[transferFn](from, to, tok, gasLimit));
@@ -113,10 +102,21 @@ const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
 const transferFrom = mkTransfer("transferFrom");
 const safeTransferFrom = mkTransfer("safeTransferFrom(address,address,uint256)");
 
-
-
-
-await assertFail(ctc.balanceOf(zeroAddr));
+try{
+  const deployBal = await ctc0.v.balanceOf(addr0);
+  console.log(`The deployers ERC721 token balance is: ${deployBal[1]}`);
+  const myBal = await ctc1.v.balanceOf(addr1);
+  console.log(`The first users token balance is: ${stdlib.formatCurrency(myBal[1])}`);
+} catch(e){
+  console.log(`${e}`);
+}
+// balanceOf takes an Address and returns an Int
+try{
+  const zeroAddrBal = await ctc0.v.balanceOf(zeroAddr);
+  console.log(`The balance of the zeroAddress is: ${stdlib.fromSome(zeroAddrBal, 0)}`);
+} catch (e){
+  console.log(`${e}`);
+}
 
 
 console.log('Exiting...');

@@ -60,6 +60,7 @@ export const main = Reach.App(() => {
       tokenURI: StringDyn,
     }),
     zeroAddr: Address,
+    tokId: UInt,
     launched: Fun([Contract], Null),
   });
   const A = API({
@@ -95,17 +96,24 @@ export const main = Reach.App(() => {
   D.only(() => {
     const {name, symbol, tokenURI} = declassify(interact.meta);
     const zeroAddr = declassify(interact.zeroAddr);
+    const tokId = declassify(interact.tokId);
   });
-  D.publish(name, symbol, tokenURI, zeroAddr);
+  D.publish(name, symbol, tokenURI, tokId, zeroAddr);
   D.interact.launched(getContract());
 
   V.name.set(name);
   V.symbol.set(symbol);
 
+  // TokenId, Address of the owner
   const owners = new Map(UInt, Address);
+  // Address of the owner, amount owned (should this be Map(Tuple(Address, Address), UInt))
   const balances = new Map(Address, UInt);
   const tokenApprovals = new Map(UInt, Address);
   const operatorApprovals = new Map(Tuple(Address, Address), Bool);
+
+  // the token initially belongs to the deployer
+  owners[tokId] = D;
+  balances[D] = 1;
 
   const [] = parallelReduce([])
   .define(() => {
@@ -117,14 +125,14 @@ export const main = Reach.App(() => {
     const tokenExists = (tokenId) => isSome(owners[tokenId]);
 
     const ownerOf = (tokenId) => {
-      check(tokenExists(tokenId), "ERC721::ownerOf: Owner query for non-existent token");
+      //check(tokenExists(tokenId), "ERC721::ownerOf: Owner query for non-existent token");
       const m_owner = owners[tokenId];
       return fromSome(m_owner, zeroAddr);
     };
     V.ownerOf.set(ownerOf);
 
     const getApproved = (tokenId) => {
-      check(tokenExists(tokenId), "ERC721::getApproved: approved query for non-existent token")
+      //check(tokenExists(tokenId), "ERC721::getApproved: approved query for non-existent token")
       const m_approval = tokenApprovals[tokenId];
       return fromSome(m_approval, zeroAddr);
     };
@@ -143,7 +151,7 @@ export const main = Reach.App(() => {
     }
 
     V.tokenURI.set((tokenId) => {
-      check(tokenExists(tokenId), "tokenURI: URI query for non-existent token");
+      //check(tokenExists(tokenId), "tokenURI: URI query for non-existent token");
       return StringDyn.concat(tokenURI, StringDyn(tokenId));
     });
     const approve = (to, tokenId) => {

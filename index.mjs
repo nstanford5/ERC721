@@ -35,13 +35,6 @@ const assertEq = (a, b, context = "assertEq") => {
   stdlib.assert(false, `${context}: ${a} == ${b}`);
 }
 
-const lock = () => {
-  const lockObj = {};
-  lockObj.reset = () => lockObj.wait = new Promise(r => { lockObj.unlock = r; });
-  lockObj.reset();
-  return lockObj;
-;}
-
 const startMeUp = async (ctc, meta) => {
   const flag = "startup success throw flag";
   try {
@@ -75,17 +68,8 @@ const ctcInfo = await ctc0.getInfo();
 const ctc1 = acc1.contract(backend, ctcInfo);
 // other helpers
 const assertBalances = async (bal0, bal1, bal2, bal3) => {
-  assertEq(bal0, (await ctc0.v.balanceOf(acc0.getAddress()))[1])// change this to unsafe views
-  // assertEq(bal1, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
-  // assertEq(bal2, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
-  // assertEq(bal3, (await ctc0.v.balanceOf(acc1.getAddress()))[1]);
-  console.log(`assertBalances complete`);
-};
-const assertOwners = async (...owners) => {
-  assertEq(await ctc1.ownerOf(tok1), owners[0], "ownerOf(1)");
-
-  const countAddr = addr => owners.reduce((n, a) => n + (addr === a ? 1 : 0), 0);
-  assertEq(await ctc1(addr1).balanceOf(addr1), countAddr(addr1), "balanceOf(addr1)");
+  assertEq(bal0, await ctc0.v.balanceOf(addr0.getAddress())[1]);
+  assertEq(bal1, await ctc1.v.balanceOf(addr1.getAddress())[1]);
 };
 const assertEvent = async (event, ...expectedArgs) => {
   const e = await ctc0.events[event].next();
@@ -93,18 +77,18 @@ const assertEvent = async (event, ...expectedArgs) => {
   expectedArgs.forEach((expectedArg, i) => assertEq(actualArgs[i], expectedArg, `${event} field ${i}`));
   console.log(`assertEvent complete`);
 };
-const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
-  const fromCtc = ctcOverride ?? (from === addr1 ? ctc1 : (from === addr2 ? ctc2 : ctc3));
-  await waitTxn(fromCtc[transferFn](from, to, tok, gasLimit));
-  await assertEvent.Approval(from, zeroAddr, tok);
-  await assertEvent.Transfer(from, to, tok);
-};
-const transferFrom = mkTransfer("transferFrom");
-const safeTransferFrom = mkTransfer("safeTransferFrom(address,address,uint256)");
+// const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
+//   const fromCtc = ctcOverride ?? (from === addr1 ? ctc1 : (from === addr2 ? ctc2 : ctc3));
+//   await waitTxn(fromCtc[transferFn](from, to, tok, gasLimit));
+//   await assertEvent.Approval(from, zeroAddr, tok);
+//   await assertEvent.Transfer(from, to, tok);
+// };
+// const transferFrom = mkTransfer("transferFrom");
+// const safeTransferFrom = mkTransfer("safeTransferFrom(address,address,uint256)");
 
 try{
-  const deployBal = await ctc0.v.balanceOf(addr0);
-  console.log(`The deployers ERC721 token balance is: ${deployBal[1]}`);
+  const deployBal = await ctc0.unsafeViews.balanceOf(addr0);
+  console.log(`The deployers ${meta.name} token balance is: ${deployBal}`);
   const myBal = await ctc1.v.balanceOf(addr1);
   console.log(`The first users token balance is: ${stdlib.formatCurrency(myBal[1])}`);
 } catch(e){
@@ -115,6 +99,16 @@ try{
   const zeroAddrBal = await ctc0.v.balanceOf(zeroAddr);
   console.log(`The balance of the zeroAddress is: ${stdlib.fromSome(zeroAddrBal, 0)}`);
 } catch (e){
+  console.log(`${e}`);
+}
+
+// the deployer is the owner
+// approve address 1, transfer to address 1
+try{
+  // await ctc0.a.approve(addr1, 1);
+  // console.log(`${addr1} has been approved.`);
+  await ctc0.a.safeTransferFrom2(addr0, addr1, 1);
+} catch(e){
   console.log(`${e}`);
 }
 

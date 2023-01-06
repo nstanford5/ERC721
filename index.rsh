@@ -112,6 +112,7 @@ export const main = Reach.App(() => {
   const operatorApprovals = new Map(Tuple(Address, Address), Bool);
 
   // the token initially belongs to the deployer
+  // this could eventually be replaced with the "mint" function
   owners[tokId] = D;
   balances[D] = 1;
 
@@ -125,14 +126,12 @@ export const main = Reach.App(() => {
     const tokenExists = (tokenId) => isSome(owners[tokenId]);
 
     const ownerOf = (tokenId) => {
-      //check(tokenExists(tokenId), "ERC721::ownerOf: Owner query for non-existent token");
       const m_owner = owners[tokenId];
       return fromSome(m_owner, zeroAddr);
     };
     V.ownerOf.set(ownerOf);
 
     const getApproved = (tokenId) => {
-      //check(tokenExists(tokenId), "ERC721::getApproved: approved query for non-existent token")
       const m_approval = tokenApprovals[tokenId];
       return fromSome(m_approval, zeroAddr);
     };
@@ -151,7 +150,6 @@ export const main = Reach.App(() => {
     }
 
     V.tokenURI.set((tokenId) => {
-      //check(tokenExists(tokenId), "tokenURI: URI query for non-existent token");
       return StringDyn.concat(tokenURI, StringDyn(tokenId));
     });
     const approve = (to, tokenId) => {
@@ -198,6 +196,7 @@ export const main = Reach.App(() => {
       return [];
     }];
   })
+  // testing this
   .api_(A.safeTransferFrom2, (from_, to, tokenId) => {
     transferChecks(this, from_, to, tokenId);
     return [ (ret) => {

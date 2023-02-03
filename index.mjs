@@ -129,9 +129,10 @@ const NFT = await stdlib.launchToken(acc0, "Dummy", "dNFT", {supply: 1});
 const nftId = NFT.id;
 console.log(`ERC721 Address: ${nftId}`);
 const minBid = stdlib.parseCurrency(5);
-const lenInBlocks = 25;
+const lenInBlocks = 10;
 const params = {nftId, minBid, lenInBlocks};
 
+let done = false;
 const bidders = [];
 const startBidders = async () => {
   let bid = minBid;
@@ -165,10 +166,13 @@ const startBidders = async () => {
   await runBidder('Alice');
   await runBidder('Bob');
   await runBidder('Claire');
+  while(! done){
+    await stdlib.wait(1);
+  }
 };// end of startBidders
 
 const ctcCreator = acc0.contract(auctionBackend);
-await ctcCreator.p.Creator({
+await ctcCreator.participants.Creator({
   getSale: () => {
     console.log(`Creator sets parameters of sale:`, params);
     return params;
@@ -188,5 +192,5 @@ for (const [who, acc] of bidders){
   const [amt, amtNFT] = await stdlib.balancesOf(acc, [null, nftId]);
   console.log(`${who} has ${stdlib.formatCurrency(amt)} ${stdlib.standardUnit} and ${amtNFT} of the NFT`);
 }
-
+done = true;
 console.log('Exiting...');

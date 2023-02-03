@@ -1,57 +1,6 @@
-/**
- * Functions
- * constructor(name, symbol)
- * 
- * ERC721 - METADATA
- * name()
- * symbol()
- * tokenURI(tokenId, _tokenURI)
- * _setTokenURI(tokenId, _tokenURI)
- * _setBaseURI(baseURI)
- * baseURI()
- * _burn(owner, tokenId)
- * 
- * 
- * ERC721
- * balanceOf(owner)
- * ownerOf(tokenId)
- * approve(to, tokenId)
- * getApproved(tokenId)
- * setApprovalForAll(to, approved)
- * isApprovedForAll(owner, operator)
- * transferFrom(from, to, tokenId)
- * safeTransferFrom(from, to, tokenId)
- * safeTransferFrom(from, to, tokenId, _data)
- * _safeTransferFrom(from, to, tokenId, _data)
- * _exists(tokenId)
- * _isApprovedOrOwner(spender, tokenId)
- * _safeMint(to, tokenId)
- * _safeMint(to, tokenId, _data)
- * _mint(to, tokenId)
- * _burn(owner, tokenId)
- * _burn(tokenId)
- * _transferFrom(from, to, tokenId)
- * _checkOnERC721Received(from, to, tokenId, _data)
- * 
- * ERC165 -- save this for later
- * constructor()
- * supportsInterface(interfaceId)
- * _registerInterface(interfaceId)
- * 
- * Context
- * _msgSender()
- * _msgData()
- * 
- * 
- * Events
- * Transfer(from, to, tokenId)
- * Approval(owner, approved, tokenId)
- * ApprovalForAll(owner, operator, approved)
- * 
- */
 'reach 0.1';
 
-export const main = Reach.App(() => {
+export const ERC721 = Reach.App(() => {
   setOptions({connectors: [ETH]});
   const D = Participant('Deployer', {
     meta: Object({
@@ -114,7 +63,8 @@ export const main = Reach.App(() => {
   // the token initially belongs to the deployer
   // this could eventually be replaced with the "mint" function
   owners[tokId] = D;
-  balances[D] = 1;
+  balances[D] = tokId;
+  tokenApprovals[tokId] = D;
 
   const [] = parallelReduce([])
   .define(() => {
@@ -123,7 +73,6 @@ export const main = Reach.App(() => {
       const m_bal = balances[owner];
       return fromSome(m_bal, 0);
     });
-    const tokenExists = (tokenId) => isSome(owners[tokenId]);
 
     const ownerOf = (tokenId) => {
       const m_owner = owners[tokenId];
@@ -144,7 +93,6 @@ export const main = Reach.App(() => {
     V.isApprovedForAll.set(isApprovedForAll);
 
     const isApprovedOrOwner = (spender, tokenId) => {
-      check(tokenExists(tokenId), "isApprovedOrOwner: token exists");
       const owner = ownerOf(tokenId);
       return spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender;
     }
@@ -235,4 +183,67 @@ export const main = Reach.App(() => {
   })
   commit();
   exit();
-});// end of Reach.App
+});// end of ERC721
+
+export const auction = Reach.App(() => {
+  const Creator = Participant('Creator', {
+    getSale: Fun([], Object({
+        nftId: Token,
+        minBid: UInt,
+        lenInBlocks: UInt,
+    })),
+    auctionReady: Fun([], Null),
+    seeBid: Fun([Address, UInt], Null),
+    showOutcome: Fun([Address, UInt], Null),
+    });
+  const Bidder = API('Bidder', {
+    bid: Fun([UInt], Tuple(Address, UInt)),
+  });
+  const V = View({
+    min: UInt,
+    nft: Token,
+    currBid: UInt,
+  });
+  init();
+
+  Creator.only(() => {
+    const {nftId, minBid, lenInBlocks} = declassify(interact.getSale());
+  });
+  Creator.publish(nftId, minBid, lenInBlocks);
+  const amt = 1;
+  commit();
+  Creator.pay([[amt, nftId]]);
+  Creator.interact.auctionReady();
+  V.nft.set(nftId);
+  V.min.set(minBid);
+  assert(balance(nftId) == amt, "balance of NFT is wrong");
+  const end = lastConsensusTime() + lenInBlocks;
+  const [highestBidder ,lastPrice, isFirstBid] = 
+    parallelReduce([Creator, minBid, true])
+    .define(() => {V.currBid.set(lastPrice);})
+    .invariant(balance(nftId) == amt)
+    .invariant(balance() == (isFirstBid ? 0 : lastPrice))
+    .while(lastConsensusTime() <= end)
+    .api_(Bidder.bid, (bid) => {
+      check(bid > lastPrice, "bid is too low");
+      return [ bid, (notify) => {
+        notify([highestBidder, lastPrice]);
+        if ( ! isFirstBid ) {
+          transfer(lastPrice).to(highestBidder);
+        }
+        const who = this;
+        Creator.interact.seeBid(who, bid);
+        return [who, bid, false];
+      }];
+    })
+    .timeout(absoluteTime(end), () => {
+      Creator.publish();
+      return [highestBidder, lastPrice, isFirstBid];
+    });
+
+  transfer(amt, nftId).to(highestBidder);
+  if ( ! isFirstBid ) { transfer(lastPrice).to(Creator); }
+  Creator.interact.showOutcome(highestBidder, lastPrice);
+  commit();
+  exit();
+});

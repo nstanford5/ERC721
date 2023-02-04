@@ -18,6 +18,8 @@ export const ERC721 = Reach.App(() => {
     transferFrom: Fun([Address, Address, UInt], Null),
     safeTransferFrom2: Fun([Address, Address, UInt], Null),
     safeTransferFrom1: Fun([Address, Address, UInt, BytesDyn], Null),
+    mint: Fun([Address, UInt], Null),
+    //burn: Fun([UInt], Null),
   },{
     // this specifies an alias for these functions
     safeTransferFrom1: 'safeTransferFrom',
@@ -68,6 +70,7 @@ export const ERC721 = Reach.App(() => {
 
   const [] = parallelReduce([])
   .define(() => {
+    const tokenExists = (tokenId) => isSome(owners[tokenId]);
     V.balanceOf.set((owner) => {
       check(owner != zeroAddr, "ERC721::balanceOf: Address zero is not a valid owner");
       const m_bal = balances[owner];
@@ -122,20 +125,32 @@ export const ERC721 = Reach.App(() => {
     }
     const doSafeTransferFrom = (caller, from_, to, tokenId, data) => {
       transfer_(caller, from_, to, tokenId);
-      const ctcMaybe = Contract.fromAddress(to);
-      ctcMaybe.match({
-        Some: (ctc) => {
-          const r = remote(ctc, ERC721TokenReceived);
-          const mv = r.onERC721Received(getAddress(), from_, tokenId, data);
-          // This hex string is bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
-          enforce(mv == Bytes.fromHex('0x150b7a02'));
-        },
-        None: () => {},
-      });
+      //const ctcMaybe = Contract.fromAddress(to);
+      // ctcMaybe.match({
+      //   Some: (ctc) => {
+      //     const r = remote(ctc, ERC721TokenReceived);
+      //     const mv = r.onERC721Received(getAddress(), from_, tokenId, data);
+      //     // This hex string is bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
+      //     enforce(mv == Bytes.fromHex('0x150b7a02'));
+      //   },
+      //   None: () => {},
+      // });
     }
   })
   .invariant(balance() == 0)
   .while(true)
+  .api_(A.mint, (to, tokenId) => {
+    check(to != zeroAddr, "Cannot mint ot zero address");
+    check(!tokenExists(tokenId), "Token already exists");
+    check(this == D, "mint can only be called by deployer");
+    return [ (k) => {
+      balances[to] = fromMaybe(balances[to], () => 1, (x) => x + 1);
+      owners[tokenId] = to;
+      E.Transfer(zeroAddr, to, tokenId);
+      k(null);
+      return [];
+    }]
+  })
   .api_(A.safeTransferFrom1, (from_, to, tokenId, data) => {
     transferChecks(this, from_, to, tokenId);
     return [ (ret) => {
@@ -144,7 +159,6 @@ export const ERC721 = Reach.App(() => {
       return [];
     }];
   })
-  // testing this
   .api_(A.safeTransferFrom2, (from_, to, tokenId) => {
     transferChecks(this, from_, to, tokenId);
     return [ (ret) => {

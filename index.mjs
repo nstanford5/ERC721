@@ -87,23 +87,25 @@ const assertEvent = async (event, ...expectedArgs) => {
   expectedArgs.forEach((expectedArg, i) => assertEq(actualArgs[i], expectedArg, `${event} field ${i}`));
   console.log(`assertEvent complete`);
 };
-// const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
-//   const fromCtc = ctcOverride ?? ((from === addr0 ? ctc0 : (from === addr1 ? ctc1 : (from === addr2 ? ctc2 : ctc3))))
-//   await waitTxn(fromCtc[transferFn](from, to, tok, gasLimit));
-//   await assertEvent.Approval(from, zeroAddr, tok);
-//   await assertEvent.Transfer(from, to, tok);
-// };
-// const transferFrom = mkTransfer("transferFrom");
-// const safeTransferFrom = mkTransfer("safeTransferFrom(address,address,uint256)");
+const mkTransfer = transferFn => async (from, to, tok, ctcOverride) => {
+  const fromCtc = ctcOverride ?? ((from === addr0 ? ctc0 : (from === addr1 ? ctc1 : (from === addr2 ? ctc2 : ctc3))))
+  //await waitTxn(ctc0)
+  await waitTxn(ctc0.a.safeTransferFrom(from, to, tok));
+  // await assertEvent.Approval(from, zeroAddr, tok);
+  // await assertEvent.Transfer(from, to, tok);
+};
+const transferFrom = mkTransfer("transferFrom");
+const safeTransferFrom = mkTransfer("safeTransferFrom(address, address, uint256)");
 
 try{
   const deployBal = await ctc0.unsafeViews.balanceOf(addr0);
   console.log(`The deployers ${meta.name} token balance is: ${deployBal}`);
-  const myBal = await ctc1.v.balanceOf(addr1);
-  console.log(`The first users token balance is: ${stdlib.formatCurrency(myBal[1])}`);
+  const myBal = await ctc1.unsafeViews.balanceOf(addr1);
+  console.log(`The first users token balance is: ${stdlib.formatCurrency(myBal)}`);
 } catch(e){
   console.log(`${e}`);
 }
+
 // // balanceOf takes an Address and returns an Int
 // try{
 //   const zeroAddrBal = await ctc0.v.balanceOf(zeroAddr);
@@ -114,14 +116,14 @@ try{
 
 // the deployer is the owner
 // approve function works
-try{
-  await ctc0.a.approve(addr1, tokId);
-  console.log(`${addr1} has been approved.`);
-  //console.log(`Attempting to approve the owner..`);
-  //await ctc0.a.approve(addr0, tokId);// this throws
-} catch(e){
-  console.log(`${e}`);
-}
+// try{
+//   await ctc0.a.approve(addr1, tokId);
+//   console.log(`${addr1} has been approved.`);
+//   //console.log(`Attempting to approve the owner..`);
+//   //await ctc0.a.approve(addr0, tokId);// this throws
+// } catch(e){
+//   console.log(`${e}`);
+// }
 
 // nft auction starts here
 //const nftId = await ctc0.getContractAddress();
@@ -183,8 +185,17 @@ await ctcCreator.participants.Creator({
   seeBid: (who, amt) => {
     console.log(`Creator saw that ${stdlib.formatAddress(who)} bid ${stdlib.formatCurrency(amt)}.`);
   },
-  showOutcome: (winner, amt) => {
+  showOutcome: async (winner, amt) => {
     console.log(`Creator saw that ${stdlib.formatAddress(winner)} won with ${stdlib.formatCurrency(amt)}`);
+    try {
+      await ctc0.a.approve(winner, tokId);
+      console.log(`Approval to ${stdlib.formatAddress(winner)} complete.`);
+      await safeTransferFrom(addr0, addr1, tokId);
+      const nftbal = await ctc0.v.balanceOf(winner);
+      console.log(`${stdlib.formatAddress(winner)} has ${nftbal} of the ERC721 token.`);
+    } catch(e){
+      console.log(`${e}`);
+    }
   },
 });// end of Creator interact object
 
